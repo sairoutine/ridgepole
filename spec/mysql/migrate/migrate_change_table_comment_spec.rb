@@ -70,3 +70,38 @@ describe 'Ridgepole::Client#diff -> migrate' do
     }
   end
 end
+
+describe 'Ridgepole::Client#diff -> migrate' do
+  partitions = []
+  partitions << "PARTITION p201610 VALUES LESS THAN ('2016-10-01') ENGINE = InnoDB"
+  partitions << "PARTITION p201611 VALUES LESS THAN ('2016-11-01') ENGINE = InnoDB"
+  partitioning_sql = "/*!50500 PARTITION BY RANGE COLUMNS(created_at)\\n(#{partitions.join(',\n ')}) */"
+
+  let(:dsl) do
+    erbh(<<-ERB)
+      create_table "histories", primary_key: ["id", "created_at"], force: :cascade, options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\\n#{partitioning_sql}" do |t|
+        t.bigint   "id", null: false, unsigned: true, auto_increment: true
+        t.bigint   "user_id", default: 0, null: false, unsigned: true
+        t.datetime "created_at", null: false
+        t.datetime "updated_at", null: false
+      end
+    ERB
+  end
+
+  before { subject.diff(dsl).migrate }
+
+  context 'when partition options' do
+    subject { client(dump_without_table_options: false) }
+
+    it {
+      expect(Ridgepole::Logger.instance).to receive(:warn).with(<<-MSG)
+[WARNING] Table option changes are ignored on `histories`.
+  from: {:primary_key=>["id", "created_at"], :options=>"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\\n/*!50500 PARTITION BY RANGE  COLUMNS(created_at)\\n(PARTITION p201610 VALUES LESS THAN ('2016-10-01') ENGINE = InnoDB,\\n PARTITION p201611 VALUES LESS THAN ('2016-11-01') ENGINE = InnoDB) */"}
+    to: {:primary_key=>["id", "created_at"], :options=>"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\\n/*!50500 PARTITION BY RANGE COLUMNS(created_at)\\n(PARTITION p201610 VALUES LESS THAN ('2016-10-01') ENGINE = InnoDB,\\n PARTITION p201611 VALUES LESS THAN ('2016-11-01') ENGINE = InnoDB) */"}
+      MSG
+      delta = subject.diff(dsl)
+      delta.migrate
+      expect(subject.dump).to_not match_ruby dsl
+    }
+  end
+end
