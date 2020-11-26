@@ -94,14 +94,14 @@ describe 'Ridgepole::Client#diff -> migrate' do
     subject { client(dump_without_table_options: false) }
 
     it {
-      expect(Ridgepole::Logger.instance).to receive(:warn).with(<<-MSG)
+      expect(Ridgepole::Logger.instance).not_to receive(:warn).with(<<-MSG)
 [WARNING] Table option changes are ignored on `histories`.
   from: {:primary_key=>["id", "created_at"], :options=>"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\\n/*!50500 PARTITION BY RANGE  COLUMNS(created_at)\\n(PARTITION p201610 VALUES LESS THAN ('2016-10-01') ENGINE = InnoDB,\\n PARTITION p201611 VALUES LESS THAN ('2016-11-01') ENGINE = InnoDB) */"}
     to: {:primary_key=>["id", "created_at"], :options=>"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\\n/*!50500 PARTITION BY RANGE COLUMNS(created_at)\\n(PARTITION p201610 VALUES LESS THAN ('2016-10-01') ENGINE = InnoDB,\\n PARTITION p201611 VALUES LESS THAN ('2016-11-01') ENGINE = InnoDB) */"}
       MSG
       delta = subject.diff(dsl)
       delta.migrate
-      expect(subject.dump).to_not match_ruby dsl
+      expect(subject.dump).to match_ruby dsl
     }
   end
 end
